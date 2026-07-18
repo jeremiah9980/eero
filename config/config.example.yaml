@@ -11,10 +11,13 @@ web:
   host: "0.0.0.0"
   port: 8080
 notifications:
-  # Put your Slack Incoming Webhook URL here.
-  # Example: ["https://hooks.slack.com/services/XXX/YYY/ZZZ"]
+  # Preferred: export SLACK_WEBHOOK_URL (or put it in .env) — it is picked up
+  # automatically and never has to be committed. You can also list webhook
+  # URLs here, e.g. ["https://hooks.slack.com/services/XXX/YYY/ZZZ"].
   webhook_urls: []
   pushcut_url: ""
+  # Send a Slack alert whenever a never-before-seen device joins the network.
+  notify_on_new_device: true
 devices:
   - name: "MyQ-408"
     match: { names: ["MyQ-408"] }
