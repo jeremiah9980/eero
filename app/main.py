@@ -395,8 +395,9 @@ if __name__ == '__main__':
 
     if a.set_session:
         from .eero_api import EeroCloud
-        EeroCloud(CFG).install_token(a.set_session)
-        print(f"Session installed at {CFG.get('session_file', './data/eero_session.cookie')} — restart the app to start polling")
+        who = EeroCloud(CFG).install_token(a.set_session)
+        print(f"Session verified for {who} and installed at "
+              f"{CFG.get('session_file', './data/eero_session.cookie')} — restart the app to start polling")
 
     if a.import_dsar:
         print(f'imported {import_dsar(a.import_dsar, CON)} rows')

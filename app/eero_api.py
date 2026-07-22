@@ -32,12 +32,28 @@ class EeroCloud:
         with open(self.session_file, 'w') as f:
             f.write(token)
 
+    @staticmethod
+    def _auth_kwargs(tok):
+        """Build the auth for a stored token, supporting both eero token forms:
+        the classic `s` session cookie ("123456|hex…") and an Authorization
+        bearer token (Amazon-SSO sessions). A token may be stored as
+        "bearer:<value>" to force the header form."""
+        if tok.lower().startswith('bearer:'):
+            return {'headers': {'Authorization': 'Bearer ' + tok[7:].strip()}}
+        # A JWT (two dots, no pipe) is a bearer token; the pipe form is the cookie.
+        if '|' not in tok and tok.count('.') == 2:
+            return {'headers': {'Authorization': 'Bearer ' + tok}}
+        return {'cookies': {'s': tok}}
+
     def _req(self, method, path, retry=True, **kw):
         tok = self._token()
         if not tok:
-            raise RuntimeError('not logged in — run: python -m app.main --config config/config.yaml --login')
-        r = requests.request(method, API + path, cookies={'s': tok}, timeout=15, **kw)
-        if r.status_code in (401, 403) and retry:
+            raise RuntimeError('not logged in — run: python -m app.main --config config/config.yaml --login '
+                               '(or --set-session for an Amazon-SSO browser token)')
+        auth = self._auth_kwargs(tok)
+        r = requests.request(method, API + path, timeout=15, **auth, **kw)
+        # Only the cookie (refreshable) token form can self-heal on 401.
+        if r.status_code in (401, 403) and retry and 'cookies' in auth:
             self._refresh()
             return self._req(method, path, retry=False, **kw)
         r.raise_for_status()
@@ -65,9 +81,18 @@ class EeroCloud:
         r.raise_for_status()
 
     def install_token(self, token):
-        """Install an externally captured session token (e.g. from a browser
-        session on my.eero.com that authenticated via Amazon)."""
-        self._save(token.strip())
+        """Install an externally captured session token and validate it against
+        /account before saving, so a bad capture fails loudly. Accepts the `s`
+        cookie value, a "bearer:<jwt>" string, or a raw bearer JWT."""
+        token = token.strip()
+        auth = self._auth_kwargs(token)
+        r = requests.get(API + '/account', timeout=15, **auth)
+        if not r.ok:
+            raise RuntimeError(f'token rejected by eero ({r.status_code}) — capture a working '
+                               f'api-user.e2ro.com request auth from the logged-in browser')
+        self._save(token)
+        acct = (r.json() or {}).get('data', {})
+        return acct.get('name') or acct.get('email') or 'account'
 
     # ── data ──────────────────────────────────────────────────────────────
     def devices(self):
